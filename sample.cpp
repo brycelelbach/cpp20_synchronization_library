@@ -40,7 +40,7 @@ THE SOFTWARE.
 
 #include <cmath>
 #include <mutex>
-#include <thread>
+#include <jthread>
 #include <vector>
 #include <string>
 #include <iostream>
@@ -72,14 +72,11 @@ template <class F>
 sum_mean_dev_t test_body(int threads, F && f) {
 
     std::vector<int> progress(threads, 0);
-	std::vector<std::thread> ts(threads);
-	for (int i = 0; i < threads; ++i)
-		ts[i] = std::thread([&, i]() {
+    std::vector<std::jthread> ts(threads);
+    for (int i = 0; i < threads; ++i)
+        ts[i] = std::jthread([&, i]() {
             progress[i] = f(sections / threads);
         });
-
-	for (auto& t : ts)
-		t.join();
 
     return sum_mean_dev(progress);
 }
@@ -94,7 +91,7 @@ sum_mean_dev_t test_omp_body(int threads, F && f) {
     return sum_mean_dev(progress);
 #else
     assert(0); // build with -fopenmp
-	return sum_mean_dev_t();
+    return sum_mean_dev_t();
 #endif
 }
 
@@ -113,9 +110,9 @@ void test(std::string const& name, int threads, F && f, std::atomic<bool>& keep_
 
     test_helper.join();
 
-	double const d = double(std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count());
+    double const d = double(std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count());
     std::cout << std::setprecision(2) << std::fixed;
-	std::cout << name << " : " << d / std::get<0>(smd) << "ns per step, fairness metric = " 
+    std::cout << name << " : " << d / std::get<0>(smd) << "ns per step, fairness metric = " 
                          << 100 * (1.0 - std::min(1.0, std::get<2>(smd) / std::get<1>(smd))) << "%." 
                          << std::endl;
 }
@@ -218,5 +215,5 @@ int main() {
     test_barrier<posix_barrier>("Pthread");
 #endif
 */
-	return 0;
+    return 0;
 }

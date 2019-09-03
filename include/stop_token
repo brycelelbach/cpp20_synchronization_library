@@ -31,7 +31,7 @@ struct unwrap_reference<std::reference_wrapper<T>> {
 template<class T> using unwrap_reference_t = typename unwrap_reference<T>::type;
 #endif
 
-// workaround for non exitsing unwrap_reference:
+// workaround for non existing unwrap_reference:
 
 inline void __spin_yield() noexcept {
   // TODO: Platform-specific code here

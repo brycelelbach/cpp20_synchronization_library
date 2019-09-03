@@ -24,6 +24,7 @@ THE SOFTWARE.
 
 #include <cstddef>
 #include <algorithm>
+#include <thread> // For `std::this_thread::sleep_for`.
 #include "atomic_wait"
 
 //#define __NO_SEM

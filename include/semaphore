@@ -350,7 +350,7 @@ public:
     __semaphore_base(const __semaphore_base&) = delete;
     __semaphore_base& operator=(const __semaphore_base&) = delete;
 
-    inline void release(ptrdiff_t update = 1) {
+    void release(ptrdiff_t update = 1) {
 #ifndef __NO_SEM_FRONT
         auto const old = __frontbuffer.fetch_add(update, std::memory_order_acq_rel);
         if(__builtin_expect(old >= 0,1)) // before: non-negative
@@ -360,14 +360,14 @@ public:
         __release_slow(update);
 #endif        
     }
-    inline void acquire() {
+    void acquire() {
         if(__builtin_expect(__try_acquire_fast(),1))
             return;
         auto const success = __semaphore_sem_wait(__semaphore);
         assert(success);
         __backfill();
     }
-    inline bool try_acquire() noexcept {
+    bool try_acquire() noexcept {
         return try_acquire_for(std::chrono::nanoseconds(0));
     }
     template <class Clock, class Duration>
@@ -392,6 +392,8 @@ public:
 };
 
 #endif //__NO_SEM
+
+namespace std {
 
 template<ptrdiff_t least_max_value>
 using semaphore_base = 
@@ -449,16 +451,16 @@ public:
     __binary_semaphore_base(__binary_semaphore_base const&) = delete;
     __binary_semaphore_base& operator=(__binary_semaphore_base const&) = delete;
 
-    inline void release(ptrdiff_t update = 1) {
+    void release(ptrdiff_t update = 1) {
         available.store(1, std::memory_order_release);
         atomic_notify_one(&available);
     }
-    inline void acquire() {
+    void acquire() {
         while (!__builtin_expect(try_acquire(), 1))
             atomic_wait_explicit(&available, 0, std::memory_order_relaxed);
     }
 
-    inline bool try_acquire() noexcept {
+    bool try_acquire() noexcept {
         return 1 == available.exchange(0, std::memory_order_acquire);
     }
     template <class Clock, class Duration>
@@ -492,3 +494,6 @@ public:
 #endif // __NO_SEM
 
 using binary_semaphore = counting_semaphore<1>;
+
+}
+

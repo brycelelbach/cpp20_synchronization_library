@@ -8,8 +8,6 @@
 #include <functional>
 #include <optional>
 
-#define LOG(...) std::cout << __VA_ARGS__ "\n"
-
 struct thread_group {
 private:
   std::vector<std::thread> members;
@@ -54,26 +52,6 @@ public:
     items_produced.release();
   }
 
-  // Attempt to dequeue one entry.
-  std::optional<T> try_dequeue()
-  {
-    std::optional<T> tmp;
-    if (!items_produced.try_acquire())
-      return tmp; 
-    // This sleep is a stand-in for a log statement in the actual code. The bug
-    // reproduces without the delay after acquiring and before locking, but it
-    // reproduces much less frequently.
-    std::this_thread::sleep_for(std::chrono::nanoseconds(500));
-    {
-      std::scoped_lock l(items_mtx);
-      assert(!items.empty());
-      tmp = std::move(items.front());
-      items.pop();
-    }
-    remaining_space.release();
-    return tmp;
-  }
-
   // Attempt to dequeue one entry with a timeout.
   template <typename Rep, typename Period>
   std::optional<T> try_dequeue_for(
@@ -113,7 +91,6 @@ int main()
 
     constexpr std::size_t num_threads = 8;
 
-    std::latch l(num_threads + 1);
     thread_group tg(num_threads,
       [&] 
       {
@@ -124,25 +101,18 @@ int main()
             (*f)();
           }
         }
-        // Clear out the queue.
-        while (true) {
-          auto f = tasks.try_dequeue();
-          if (f) {
-            assert(*f);
-            (*f)();
-          } else
-            // We weren't able to dequeue anything; the queue's empty.
-            break;
-        }
-        l.arrive_and_wait();
       }
     );
     
     for (std::size_t i = 0; i < num_enqueues_per_run; ++i)
       tasks.enqueue([&] { ++count; });
 
-    stop_requested.store(true, std::memory_order_relaxed);
+    std::latch l(num_threads + 1);
+    for (std::size_t i = 0; i < num_threads; ++i)
+      tasks.enqueue([&] { l.arrive_and_wait(); });
     l.arrive_and_wait();
+
+    stop_requested.store(true, std::memory_order_relaxed);
   }
 
   assert(num_runs * num_enqueues_per_run == count);

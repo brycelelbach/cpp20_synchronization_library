@@ -361,4 +361,14 @@ namespace std {
     }
 }
 
+#ifdef __TABLE_INLINE
+
+inline contended_t contention[256];
+
+contended_t * __contention(volatile void const * p) {
+    return contention + ((uintptr_t)p & 255);
+}
+
+#endif //__TABLE_INLINE
+
 #endif //__ATOMIC_WAIT_INCLUDED

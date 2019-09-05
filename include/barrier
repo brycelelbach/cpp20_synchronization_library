@@ -31,6 +31,8 @@ THE SOFTWARE.
 //#define __BARRIER_NO_WAIT
 //#define __BARRIER_NO_SPECIALIZATION
 
+namespace std {
+
 struct EmptyCompletionF {
     inline void operator()() noexcept { }
 };
@@ -44,7 +46,7 @@ class barrier {
 
     static constexpr size_t __max_steps = CHAR_BIT * sizeof(ptrdiff_t) - 1;
 
-    using __phase_t = uint8_t;    
+    using __phase_t = uint8_t;
 
     struct alignas(64) __state_t {
         std::atomic<__phase_t> v[__max_steps + 1] = {0};
@@ -57,12 +59,12 @@ class barrier {
     alignas(64) std::vector<__state_t> state;
     CompletionF                        completion;
 
-    static constexpr __phase_t __next_phase(__phase_t old) { 
-        return (old + 1) & 3; 
+    static constexpr __phase_t __next_phase(__phase_t old) {
+        return (old + 1) & 3;
     }
     inline bool __try_get_id(size_t id, __phase_t old_phase) {
-        return state[id].v[__max_steps].compare_exchange_strong(old_phase, 
-                                                                __next_phase(old_phase), 
+        return state[id].v[__max_steps].compare_exchange_strong(old_phase,
+                                                                __next_phase(old_phase),
                                                                 std::memory_order_relaxed);
     }
     inline size_t __get_id(__phase_t const old_phase, ptrdiff_t count) {
@@ -78,10 +80,10 @@ class barrier {
         }
         return ~0ull;
     }
-    static constexpr uint32_t __log2_floor(ptrdiff_t count) { 
-        return count <= 1 ? 0 : 1 + __log2_floor(count >> 1); 
+    static constexpr uint32_t __log2_floor(ptrdiff_t count) {
+        return count <= 1 ? 0 : 1 + __log2_floor(count >> 1);
     }
-    static constexpr uint32_t __log2_ceil(ptrdiff_t count) { 
+    static constexpr uint32_t __log2_ceil(ptrdiff_t count) {
         auto const t = __log2_floor(count);
         return count == (1 << t) ? t : t + 1;
     }
@@ -89,10 +91,10 @@ class barrier {
 public:
     using arrival_token = std::tuple<std::atomic<__phase_t>&, __phase_t>;
 
-    barrier(ptrdiff_t expected, CompletionF completion = CompletionF()) 
-            : expected(expected), expected_steps(__log2_ceil(expected)), 
+    barrier(ptrdiff_t expected, CompletionF completion = CompletionF())
+            : expected(expected), expected_steps(__log2_ceil(expected)),
               expected_adjustment(0), phase(0),
-              state(expected), completion(completion) { 
+              state(expected), completion(std::move(completion)) {
         assert(expected >= 0);
     }
 
@@ -133,7 +135,7 @@ public:
         if(__builtin_expect(old_phase != current_phase.load(std::memory_order_acquire),1))
             return;
 #ifndef __BARRIER_NO_WAIT
-        using __clock = std::conditional<std::chrono::high_resolution_clock::is_steady, 
+        using __clock = std::conditional<std::chrono::high_resolution_clock::is_steady,
                                             std::chrono::high_resolution_clock,
                                             std::chrono::steady_clock>::type;
         auto const start = __clock::now();
@@ -141,7 +143,7 @@ public:
         while (old_phase == current_phase.load(std::memory_order_acquire)) {
 #ifndef __BARRIER_NO_WAIT
             auto const elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(__clock::now() - start);
-            auto const step = std::min(elapsed / 4 + std::chrono::nanoseconds(100), 
+            auto const step = std::min(elapsed / 4 + std::chrono::nanoseconds(100),
                                        std::chrono::nanoseconds(1500));
             if(step > std::chrono::nanoseconds(1000))
                 std::this_thread::sleep_for(step);
@@ -170,8 +172,8 @@ class barrier {
 public:
     using arrival_token = bool;
 
-    barrier(ptrdiff_t expected, CompletionF completion = CompletionF()) 
-        : phase(false), expected(expected), arrived(expected), completion(completion) { 
+    barrier(ptrdiff_t expected, CompletionF completion = CompletionF())
+        : phase(false), expected(expected), arrived(expected), completion(std::move(completion)) {
     }
 
     ~barrier() = default;
@@ -232,8 +234,8 @@ class barrier<EmptyCompletionF> {
 public:
     using arrival_token = uint64_t;
 
-    barrier(ptrdiff_t count, EmptyCompletionF = EmptyCompletionF()) 
-        : phase_arrived_expected(__init(count)) { 
+    barrier(ptrdiff_t count, EmptyCompletionF = EmptyCompletionF())
+        : phase_arrived_expected(__init(count)) {
     }
 
     ~barrier() = default;
@@ -275,3 +277,10 @@ public:
 #endif //__BARRIER_NO_SPECIALIZATION
 
 #endif //__BARRIER_NO_BUTTERFLY
+
+#if defined(__BARRIER_INLINE_FAVORITE_HASH)
+inline thread_local size_t __barrier_favorite_hash =
+    std::hash<std::thread::id>()(std::this_thread::get_id());
+#endif
+
+}

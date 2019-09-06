@@ -46,7 +46,7 @@ THE SOFTWARE.
 
 #ifndef __NO_SEM
 
-#if defined(__APPLE__) 
+#if defined(__APPLE__)
 
     #include <dispatch/dispatch.h>
 
@@ -89,7 +89,7 @@ THE SOFTWARE.
     #define __SEM_POST_ONE
     static constexpr ptrdiff_t __semaphore_max = SEM_VALUE_MAX;
     using __semaphore_sem_t = sem_t;
-    
+
     inline bool __semaphore_sem_init(__semaphore_sem_t &sem, int init) {
         return sem_init(&sem, 0, init) == 0;
     }
@@ -153,7 +153,7 @@ class __atomic_semaphore_base {
     __semaphore_no_inline inline bool __fetch_sub_if_slow(ptrdiff_t old) {
         while (old != 0) {
             if (count.compare_exchange_weak(old, old - 1, std::memory_order_acquire, std::memory_order_relaxed))
-                return true; 
+                return true;
         }
         return false;
     }
@@ -176,7 +176,7 @@ class __atomic_semaphore_base {
     }
     __semaphore_no_inline inline bool __acquire_slow_timed(std::chrono::nanoseconds const& rel_time) {
 
-        using __clock = std::conditional<std::chrono::high_resolution_clock::is_steady, 
+        using __clock = std::conditional<std::chrono::high_resolution_clock::is_steady,
                                          std::chrono::high_resolution_clock,
                                          std::chrono::steady_clock>::type;
 
@@ -196,8 +196,8 @@ class __atomic_semaphore_base {
     std::atomic<ptrdiff_t> count;
 
 public:
-    static constexpr ptrdiff_t max() noexcept { 
-        return std::numeric_limits<ptrdiff_t>::max(); 
+    static constexpr ptrdiff_t max() noexcept {
+        return std::numeric_limits<ptrdiff_t>::max();
     }
 
     __atomic_semaphore_base(ptrdiff_t count) : count(count) { }
@@ -249,8 +249,9 @@ class __semaphore_base {
         auto const back_amount = __backbuffer.fetch_sub(2, std::memory_order_acquire);
         bool const post_one = back_amount > 0;
         bool const post_two = back_amount > 1;
-        auto const success = (!post_one || __semaphore_sem_post(__semaphore, 1)) && 
+        auto const success = (!post_one || __semaphore_sem_post(__semaphore, 1)) &&
                              (!post_two || __semaphore_sem_post(__semaphore, 1));
+        (void)success; // Suppress unused variable warnings in builds with asserts off.
         assert(success);
         if(!post_one || !post_two)
             __backbuffer.fetch_add(!post_one ? 2 : 1, std::memory_order_relaxed);
@@ -260,7 +261,7 @@ class __semaphore_base {
 #ifndef __NO_SEM_FRONT
 #ifndef __NO_SEM_POLL
         if(__builtin_expect(__frontbuffer.load(std::memory_order_relaxed) <= 0,0)) {
-            using __clock = std::conditional<std::chrono::high_resolution_clock::is_steady, 
+            using __clock = std::conditional<std::chrono::high_resolution_clock::is_steady,
                                              std::chrono::high_resolution_clock,
                                              std::chrono::steady_clock>::type;
             auto const start = __clock::now();
@@ -290,17 +291,20 @@ class __semaphore_base {
         bool const post_two = post_amount > 1;
         if(post_amount > 2)
             __backbuffer.fetch_add(post_amount - 2, std::memory_order_acq_rel);
-        auto const success = (!post_one || __semaphore_sem_post(__semaphore, 1)) && 
+        auto const success = (!post_one || __semaphore_sem_post(__semaphore, 1)) &&
                              (!post_two || __semaphore_sem_post(__semaphore, 1));
+        (void)success; // Suppress unused variable warnings in builds with asserts off.
         assert(success);
     #else
         for(; post_amount; --post_amount) {
             auto const success = __semaphore_sem_post(__semaphore, 1);
+            (void)success; // Suppress unused variable warnings in builds with asserts off.
             assert(success);
         }
     #endif
 #else
         auto const success = __semaphore_sem_post(__semaphore, post_amount);
+        (void)success; // Suppress unused variable warnings in builds with asserts off.
         assert(success);
 #endif
     }
@@ -322,7 +326,7 @@ public:
     static constexpr ptrdiff_t max() noexcept {
         return __semaphore_max;
     }
-    
+
     __semaphore_base(ptrdiff_t count = 0) : __semaphore()
 #ifndef __NO_SEM_FRONT
     , __frontbuffer(count)
@@ -330,14 +334,15 @@ public:
 #ifndef __NO_SEM_BACK
     , __backbuffer(0)
 #endif
-    { 
+    {
         assert(count <= max());
-        auto const success = 
+        auto const success =
 #ifndef __NO_SEM_FRONT
             __semaphore_sem_init(__semaphore, 0);
 #else
             __semaphore_sem_init(__semaphore, count);
 #endif
+        (void)success; // Suppress unused variable warnings in builds with asserts off.
         assert(success);
     }
     ~__semaphore_base() {
@@ -345,6 +350,7 @@ public:
         assert(__frontbuffer.load(std::memory_order_relaxed) >= 0);
 #endif
         auto const success = __semaphore_sem_destroy(__semaphore);
+        (void)success; // Suppress unused variable warnings in builds with asserts off.
         assert(success);
     }
 
@@ -359,12 +365,13 @@ public:
         __release_slow(std::min(update, -old));
 #else
         __release_slow(update);
-#endif        
+#endif
     }
     void acquire() {
         if(__builtin_expect(__try_acquire_fast(),1))
             return;
         auto const success = __semaphore_sem_wait(__semaphore);
+        (void)success; // Suppress unused variable warnings in builds with asserts off.
         assert(success);
         __backfill();
     }
@@ -397,10 +404,10 @@ public:
 namespace std {
 
 template<ptrdiff_t least_max_value>
-using semaphore_base = 
+using semaphore_base =
 #ifndef __NO_SEM
-    typename std::conditional<least_max_value <= __semaphore_base::max(), 
-                              __semaphore_base, 
+    typename std::conditional<least_max_value <= __semaphore_base::max(),
+                              __semaphore_base,
                               __atomic_semaphore_base>::type
 #else
     __atomic_semaphore_base
@@ -425,7 +432,7 @@ class __binary_semaphore_base {
 
     __semaphore_no_inline inline bool __acquire_slow_timed(std::chrono::nanoseconds const& rel_time) {
 
-        using __clock = std::conditional<std::chrono::high_resolution_clock::is_steady, 
+        using __clock = std::conditional<std::chrono::high_resolution_clock::is_steady,
                                          std::chrono::high_resolution_clock,
                                          std::chrono::steady_clock>::type;
 
